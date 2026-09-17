@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#20448C">
+<title>H&amp;S Issues Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --blue-900:#0F2752; --blue-700:#163471; --blue-500:#20448C; --blue-400:#3E63B0;
+    --blue-200:#9FB1D6; --blue-050:#EAF0FA;
+    --gold-600:#D2A800; --gold-500:#F1C300; --gold-300:#F8E090; --gold-100:#FCF1C4;
+    --ink:#1A1F2B; --grey:#5B6472; --line:#E2E6EE; --canvas:#F4F6FA; --white:#FFFFFF;
+    --bad:#C0374A; --ok:#1E7A5C;
+    --cat-pvc:#20448C; --cat-warehouse:#F1C300; --cat-yard:#1E7A5C;
+    --cat-aluminium:#5B6472; --cat-office:#7C5CBF; --cat-other:#C7CDD9;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--ink);
+         font:400 15px/1.5 "Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  h1,h2,h3,button { font-family:"Archivo",sans-serif; }
+
+  header { background:var(--white); border-bottom:1px solid var(--line); padding:16px 20px; position:sticky; top:0; z-index:5; }
+  .headRow { max-width:1180px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .brandGroup { display:flex; align-items:center; gap:14px; }
+  .brand { display:flex; flex-direction:column; }
+  .brandWord { background:var(--blue-500); color:#fff; font-weight:900; font-size:14px; letter-spacing:.5px; padding:5px 10px; }
+  .brandBar { background:var(--gold-500); height:4px; }
+  .pageTitle { font-size:17px; font-weight:800; color:var(--blue-900); }
+  .pageSub { font-size:12.5px; color:var(--grey); }
+
+  #exportBtn { background:var(--gold-500); color:var(--blue-900); border:none; border-radius:10px;
+        font-size:14px; font-weight:800; padding:11px 20px; min-height:42px; cursor:pointer; white-space:nowrap; }
+  #exportBtn:disabled { opacity:.4; cursor:not-allowed; }
+  #exportBtn .spin { display:inline-block; width:13px; height:13px; border:2px solid rgba(15,39,82,.35);
+              border-top-color:var(--blue-900); border-radius:50%; animation:s .7s linear infinite; vertical-align:-2px; margin-right:6px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+
+  main { max-width:1180px; margin:0 auto; padding:24px 20px 60px; }
+
+  /* ---------- Upload ---------- */
+  #uploadCard { background:var(--white); border:2px dashed var(--blue-200); border-radius:14px;
+                padding:40px 24px; text-align:center; transition:border-color .15s, background .15s; cursor:pointer; }
+  #uploadCard.drag { border-color:var(--blue-500); background:var(--blue-050); }
+  #uploadCard .ic { font-size:40px; margin-bottom:10px; }
+  #uploadCard .ttl { font-family:"Archivo",sans-serif; font-weight:800; font-size:18px; color:var(--blue-900); }
+  #uploadCard .hint { color:var(--grey); font-size:13.5px; margin-top:6px; }
+  #uploadCard input { display:none; }
+
+  #fileBar { display:none; align-items:center; justify-content:space-between; gap:12px;
+             background:var(--white); border:1px solid var(--line); border-radius:12px; padding:12px 16px; margin-bottom:18px; flex-wrap:wrap; }
+  #fileBar.show { display:flex; }
+  #fileName { font-weight:700; font-size:14px; }
+  #fileMeta { color:var(--grey); font-size:12.5px; }
+  #changeFileBtn { background:none; border:none; color:var(--blue-500); font-weight:700; font-size:13px; cursor:pointer; text-decoration:underline; padding:0; }
+
+  .msg { border-radius:9px; padding:12px 14px; font-size:13.5px; font-weight:600; margin-bottom:16px; display:none; }
+  .msg.show { display:block; }
+  .msg.err { background:#FBE9EC; color:var(--bad); border:1px solid #F3C4CC; }
+
+  /* ---------- KPI strip ---------- */
+  #kpis { display:none; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px; }
+  #kpis.show { display:grid; }
+  @media (max-width:820px) { #kpis { grid-template-columns:repeat(2,1fr); } }
+  .kpi { background:var(--white); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .kpi .num { font-family:"Archivo",sans-serif; font-weight:800; font-size:26px; color:var(--blue-500); line-height:1.1; }
+  .kpi.open .num { color:var(--bad); }
+  .kpi.resolved .num { color:var(--ok); }
+  .kpi .lbl { font-size:11px; color:var(--grey); text-transform:uppercase; letter-spacing:.4px; font-weight:700; margin-top:4px; }
+  .kpi .range { font-size:12.5px; font-weight:700; color:var(--blue-900); line-height:1.35; }
+
+  /* ---------- Charts ---------- */
+  #dashboard { display:none; }
+  #dashboard.show { display:block; }
+  .card { background:var(--white); border:1px solid var(--line); border-radius:14px; padding:22px; margin-bottom:18px; }
+  .cardTitle { font-size:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--blue-900); margin:0 0 16px; }
+  .chartWrap { position:relative; height:280px; }
+  .chartWrap.tall { height:360px; }
+
+  .empty { color:var(--grey); text-align:center; padding:60px 10px; font-size:14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="headRow">
+    <div class="brandGroup">
+      <div class="brand"><span class="brandWord">LISTERS</span><span class="brandBar"></span></div>
+      <div>
+        <div class="pageTitle">Health &amp; Safety Issues Dashboard</div>
+        <div class="pageSub">Upload an issues export to see volume, category and status at a glance.</div>
+      </div>
+    </div>
+    <button id="exportBtn" disabled>Export PDF</button>
+  </div>
+</header>
+
+<main>
+  <div class="msg" id="msg"></div>
+
+  <div id="uploadCard">
+    <div class="ic">📄</div>
+    <div class="ttl">Drop your issues CSV here, or click to browse</div>
+    <div class="hint">Exported from Mitti — Issue ID, Category, Location, Status, Assignee, Created…</div>
+    <input type="file" id="fileInput" accept=".csv,text/csv">
+  </div>
+
+  <div id="fileBar">
+    <div>
+      <div id="fileName"></div>
+      <div id="fileMeta"></div>
+    </div>
+    <button id="changeFileBtn">Change file</button>
+  </div>
+
+  <div id="kpis">
+    <div class="kpi"><div class="num" id="kpiTotal">–</div><div class="lbl">Total issues</div></div>
+    <div class="kpi open"><div class="num" id="kpiOpen">–</div><div class="lbl">Open</div></div>
+    <div class="kpi resolved"><div class="num" id="kpiResolved">–</div><div class="lbl">Resolved</div></div>
+    <div class="kpi"><div class="range" id="kpiRange">–</div><div class="lbl">Date range</div></div>
+    <div class="kpi"><div class="range" id="kpiSites">–</div><div class="lbl">Site(s)</div></div>
+  </div>
+
+  <div id="dashboard">
+    <div class="card">
+      <div class="cardTitle">Issues by month</div>
+      <div class="chartWrap"><canvas id="chartByMonth"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="cardTitle">Category breakdown by month</div>
+      <div class="chartWrap"><canvas id="chartCategory"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="cardTitle">Status by assignee</div>
+      <div class="chartWrap tall"><canvas id="chartAssignee"></canvas></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const CATEGORY_COLOURS = {
+  "PVC": "#20448C", "Warehouse": "#F1C300", "Yard": "#1E7A5C",
+  "Aluminium": "#5B6472", "Office": "#7C5CBF", "Other": "#C7CDD9",
+};
+const OPEN_COLOUR = "#C0374A", RESOLVED_COLOUR = "#1E7A5C";
+
+let currentFile = null;
+let charts = { month: null, category: null, assignee: null };
+
+Chart.defaults.font.family = "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, sans-serif";
+Chart.defaults.color = "#5B6472";
+
+function msg(text) {
+  const el = $("#msg");
+  el.textContent = text;
+  el.className = "msg show err";
+}
+function clearMsg() { $("#msg").className = "msg"; }
+
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+async function apiErrorMessage(r, fallback) {
+  try { const j = await r.json(); return j.detail || fallback; } catch (_) { return fallback; }
+}
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => c && c.destroy());
+  charts = { month: null, category: null, assignee: null };
+}
+
+function renderDashboard(data) {
+  const { summary, by_month, category_by_month, status_by_assignee } = data;
+
+  $("#kpiTotal").textContent = summary.total.toLocaleString();
+  $("#kpiOpen").textContent = summary.open.toLocaleString();
+  $("#kpiResolved").textContent = summary.resolved.toLocaleString();
+  $("#kpiRange").textContent = `${summary.date_from} – ${summary.date_to}`;
+  $("#kpiSites").textContent = summary.sites.length ? summary.sites.join(", ") : "All sites";
+  $("#kpis").classList.add("show");
+
+  destroyCharts();
+
+  charts.month = new Chart($("#chartByMonth"), {
+    type: "bar",
+    data: {
+      labels: by_month.map(m => m.label),
+      datasets: [{
+        label: "Issues",
+        data: by_month.map(m => m.count),
+        backgroundColor: "#20448C",
+        borderRadius: 4,
+        maxBarThickness: 46,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: "#E2E6EE" } },
+      },
+    },
+  });
+
+  const categories = category_by_month.categories;
+  charts.category = new Chart($("#chartCategory"), {
+    type: "bar",
+    data: {
+      labels: category_by_month.months,
+      datasets: categories.map(cat => ({
+        label: cat,
+        data: category_by_month.series[cat],
+        backgroundColor: CATEGORY_COLOURS[cat] || "#C7CDD9",
+        maxBarThickness: 46,
+      })),
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 12, padding: 16 } } },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: "#E2E6EE" } },
+      },
+    },
+  });
+
+  const assignees = status_by_assignee.assignees;
+  charts.assignee = new Chart($("#chartAssignee"), {
+    type: "bar",
+    data: {
+      labels: assignees,
+      datasets: [
+        { label: "Open", data: status_by_assignee.open, backgroundColor: OPEN_COLOUR, stack: "s" },
+        { label: "Resolved", data: status_by_assignee.resolved, backgroundColor: RESOLVED_COLOUR, stack: "s" },
+      ],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 12, padding: 16 } } },
+      scales: {
+        x: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: "#E2E6EE" } },
+        y: { stacked: true, grid: { display: false } },
+      },
+    },
+  });
+
+  $("#dashboard").classList.add("show");
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  clearMsg();
+  currentFile = null;
+  $("#exportBtn").disabled = true;
+
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  try {
+    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    if (!r.ok) {
+      msg(await apiErrorMessage(r, "Could not parse that CSV."));
+      $("#dashboard").classList.remove("show");
+      $("#kpis").classList.remove("show");
+      return;
+    }
+    const data = await r.json();
+    currentFile = file;
+    $("#fileName").textContent = file.name;
+    $("#fileMeta").textContent = `${fmtBytes(file.size)} • ${data.summary.total.toLocaleString()} issues parsed`;
+    $("#fileBar").classList.add("show");
+    $("#uploadCard").style.display = "none";
+    $("#exportBtn").disabled = false;
+    renderDashboard(data);
+  } catch (e) {
+    msg("Network error: " + e.message);
+  }
+}
+
+async function exportPdf() {
+  if (!currentFile) return;
+  clearMsg();
+  const btn = $("#exportBtn");
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Generating…';
+  try {
+    const fd = new FormData();
+    fd.append("file", currentFile, currentFile.name);
+    const r = await fetch("/api/export/pdf", { method: "POST", body: fd });
+    if (!r.ok) { msg(await apiErrorMessage(r, "Could not generate the PDF.")); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Listers-HS-Issues-Report.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) {
+    msg("Network error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+function resetUpload() {
+  currentFile = null;
+  $("#fileBar").classList.remove("show");
+  $("#uploadCard").style.display = "block";
+  $("#exportBtn").disabled = true;
+  $("#kpis").classList.remove("show");
+  $("#dashboard").classList.remove("show");
+  destroyCharts();
+  clearMsg();
+  $("#fileInput").value = "";
+}
+
+// ---------- wire up ----------
+$("#uploadCard").addEventListener("click", () => $("#fileInput").click());
+$("#fileInput").addEventListener("change", e => handleFile(e.target.files[0]));
+["dragenter", "dragover"].forEach(evt =>
+  $("#uploadCard").addEventListener(evt, e => { e.preventDefault(); $("#uploadCard").classList.add("drag"); }));
+["dragleave", "drop"].forEach(evt =>
+  $("#uploadCard").addEventListener(evt, e => { e.preventDefault(); $("#uploadCard").classList.remove("drag"); }));
+$("#uploadCard").addEventListener("drop", e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+$("#changeFileBtn").addEventListener("click", resetUpload);
+$("#exportBtn").addEventListener("click", exportPdf);
+</script>
+</body>
+</html>
